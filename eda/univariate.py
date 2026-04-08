@@ -27,20 +27,16 @@ def plot_numeric_distributions(data: pd.DataFrame,
         Font size for the main figure title.
 
     palette : None, str, list or dict
-        - None → usa colores por defecto
-        - str → nombre de paleta seaborn
-        - list → lista de colores
-        - dict → {"columna": "color"}
+        - None: usa colores por defecto
+        - str: nombre de paleta seaborn
+        - list: lista de colores
+        - dict: {"columna": "color"}
 
     show_stats : None, str or list, default=None
-        - None → no muestra estadísticas
-        - "all" → muestra mean, median y mode
-        - list → ["mean", "median", "mode"]
+        - None : no muestra estadísticas
+        - "all" : muestra mean, median y mode
+        - list : ["mean", "median", "mode"]
 
-    Returns
-    -------
-    None
-        Does not return a value. Displays the distribution plots.
     """
 
     try:
@@ -151,11 +147,6 @@ def plot_categorical_donut_charts(data: pd.DataFrame,
 
   color_dict : dict, default=None
         Dictionary of colors per column
-
-  Returns
-  -------
-  None
-      Displays the donut charts.
   """
 
   fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=figsize)

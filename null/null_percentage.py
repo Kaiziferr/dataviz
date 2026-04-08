@@ -11,11 +11,7 @@ def null_percentage_per_feature(data: pd.DataFrame, **kwargs) -> None:
     **kwargs :
         Additional keyword arguments passed to seaborn.displot().set()
         for plot customization (e.g., title, labels).
-
-    Returns
-    -------
-    None
-        Does not return a value. Displays the null percentage distribution plot.
+        
     """
     try:
         ticklabels = (
