@@ -1,3 +1,151 @@
+def plot_boxplots(
+    data: pd.DataFrame,
+    nrows: int = 3,
+    ncols: int = 3,
+    figsize: tuple = (9, 6),
+    fontsize_title: int = 12,
+    palette=None,
+    show_axis_names: bool = True,
+    orientation: str = "h",
+    box_width: float = 0.35,
+    show_fliers: bool = True
+) -> None:
+
+    try:
+
+        numeric_columns = data.select_dtypes(include=np.number).columns
+
+        if len(numeric_columns) == 0:
+            raise ValueError("No numeric columns found.")
+
+        fig, axes = plt.subplots(
+            nrows=nrows,
+            ncols=ncols,
+            figsize=figsize
+        )
+
+        axes = np.atleast_1d(axes).flatten()
+
+        if palette is None:
+            colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+
+        elif isinstance(palette, str):
+            colors = sns.color_palette(
+                palette,
+                len(numeric_columns)
+            )
+
+        elif isinstance(palette, list):
+            colors = palette
+
+        elif isinstance(palette, dict):
+            colors = None
+
+        else:
+            raise ValueError(
+                "palette must be None, str, list or dict"
+            )
+
+        horizontal = orientation.lower() in (
+            "horizontal",
+            "h"
+        )
+
+        for i, column in enumerate(numeric_columns):
+
+            if i >= len(axes):
+                break
+
+            if isinstance(palette, dict):
+                color = palette.get(
+                    column,
+                    plt.rcParams["axes.prop_cycle"]
+                    .by_key()["color"][i % 10]
+                )
+            else:
+                color = colors[i % len(colors)]
+
+            ax = axes[i]
+
+            values = data[column].dropna()
+
+            boxplot_kwargs = dict(
+                widths=box_width,
+                patch_artist=True,
+                showfliers=show_fliers,
+                boxprops=dict(
+                    facecolor="none",
+                    edgecolor=color,
+                    linewidth=1.8
+                ),
+                whiskerprops=dict(
+                    color=color,
+                    linewidth=1.4
+                ),
+                capprops=dict(
+                    color=color,
+                    linewidth=1.4
+                ),
+                medianprops=dict(
+                    color=color,
+                    linewidth=2.2
+                ),
+                flierprops=dict(
+                    marker="o",
+                    markersize=4,
+                    markerfacecolor="white",
+                    markeredgecolor=color,
+                    markeredgewidth=0.8,
+                    alpha=0.9
+                )
+            )
+
+            ax.boxplot(
+                values,
+                vert=not horizontal,
+                **boxplot_kwargs
+            )
+
+            ax.set_title(
+                column,
+                fontsize=10,
+                pad=10
+            )
+
+            if not show_axis_names:
+                ax.set_xlabel("")
+                ax.set_ylabel("")
+
+            ax.set(xlabel=None, ylabel=None)
+
+            # estilo limpio
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+
+            ax.grid(
+                alpha=0.20,
+                linestyle="--",
+                linewidth=0.5
+            )
+
+        for j in range(i + 1, len(axes)):
+            axes[j].set_visible(False)
+
+        fig.suptitle(
+            "Boxplot — Numeric Features",
+            fontsize=fontsize_title
+        )
+
+        fig.tight_layout()
+
+        plt.show()
+
+    except Exception as e:
+        print(e)
+
+
+
+
 def plot_numeric_distributions(data: pd.DataFrame,
                                nrows: int = 3,
                                ncols: int = 3,
