@@ -1,4 +1,4 @@
-def summary(tables:dict, path: Path, read_f = pd.read_csv)-> pd.DataFrame:
+def summary_many_tables(tables:dict, path: Path, read_f = pd.read_csv)-> pd.DataFrame:
     """
         Summarize multiple data files into a single DataFrame.
 
@@ -40,4 +40,4 @@ OLIST_FILES = {
     "order_items": "olist_order_items_dataset.csv"
 }
 """
-# summary(OLIST_FILES, Path('../../data'))
+# summary_many_tables(OLIST_FILES, Path('../../data'))
