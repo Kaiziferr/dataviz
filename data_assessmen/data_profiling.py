@@ -171,3 +171,166 @@ def evaluate_completeness(
             "Completeness %",
         ],
     )
+
+
+
+def evaluate_uniqueness(
+    table: pd.DataFrame,
+    combination: Optional[list[str]] = None,
+    acceptance_percentage: float = 0.0,
+) -> pd.DataFrame:
+    """
+    Evaluate the uniqueness dimension of a dataset.
+
+    The function supports two evaluation modes:
+
+    1. Individual evaluation
+       Each column is evaluated independently. Only columns whose
+       uniqueness percentage is greater than or equal to the acceptance
+       threshold are returned.
+
+    2. Combination evaluation
+       A group of columns is evaluated as a composite key. Each unique
+       row combination is treated as a unique record. In this mode, the
+       acceptance threshold is ignored.
+
+    Parameters
+    ----------
+    table : pandas.DataFrame
+        Input dataset.
+
+    combination : list of str, optional
+        Columns to evaluate as a composite key. If ``None`` or empty,
+        every column is evaluated independently.
+
+    acceptance_percentage : float, default=0.0
+        Minimum uniqueness percentage required to include a column in
+        the output. Valid range is [0, 100].
+
+    Returns
+    -------
+    pandas.DataFrame
+        Profiling results with the following columns:
+
+        - Dimension
+        - Column
+        - Record Count
+        - Unique Count
+        - Duplicate Count
+        - Uniqueness %
+
+    Raises
+    ------
+    ValueError
+        If the acceptance percentage is outside [0, 100], if duplicated
+        column names are provided in the combination, or if any column
+        does not exist in the dataset.
+
+    Notes
+    -----
+    Null values are considered valid values during uniqueness analysis.
+    Therefore, repeated nulls are counted as duplicates.
+
+    Examples
+    --------
+    >>> evaluate_uniqueness(df)
+
+    >>> evaluate_uniqueness(
+    ...     df,
+    ...     acceptance_percentage=95
+    ... )
+
+    >>> evaluate_uniqueness(
+    ...     df,
+    ...     combination=["customer_id", "country"]
+    ... )
+    """
+
+    if not 0 <= acceptance_percentage <= 100:
+        raise ValueError(
+            "acceptance_percentage must be between 0 and 100."
+        )
+
+    combination = combination or []
+
+    if combination:
+        duplicated_columns = pd.Index(combination).duplicated()
+
+        if duplicated_columns.any():
+            repeated = pd.Index(combination)[duplicated_columns].unique().tolist()
+            raise ValueError(
+                f"Duplicate column names in combination: {repeated}"
+            )
+
+        missing = sorted(set(combination) - set(table.columns))
+        if missing:
+            raise ValueError(
+                f"Columns not found: {missing}"
+            )
+
+    record_count = len(table)
+    results = []
+
+    if not combination:
+
+        for column in table.columns:
+
+            unique_count = table[column].nunique(dropna=False)
+            duplicate_count = record_count - unique_count
+
+            uniqueness = (
+                unique_count / record_count * 100
+                if record_count
+                else 0.0
+            )
+
+            if uniqueness >= acceptance_percentage:
+                results.append(
+                    {
+                        "Dimension": "Uniqueness",
+                        "Column": column,
+                        "Record Count": record_count,
+                        "Unique Count": int(unique_count),
+                        "Duplicate Count": int(duplicate_count),
+                        "Uniqueness %": round(uniqueness, 2),
+                    }
+                )
+
+    else:
+
+        unique_count = (
+            table[combination]
+            .drop_duplicates()
+            .shape[0]
+        )
+
+        duplicate_count = record_count - unique_count
+
+        uniqueness = (
+            unique_count / record_count * 100
+            if record_count
+            else 0.0
+        )
+
+        results.append(
+            {
+                "Dimension": "Uniqueness",
+                "Column": " + ".join(combination),
+                "Record Count": record_count,
+                "Unique Count": int(unique_count),
+                "Duplicate Count": int(duplicate_count),
+                "Uniqueness %": round(uniqueness, 2),
+            }
+        )
+
+    return pd.DataFrame(
+        results,
+        columns=[
+            "Dimension",
+            "Column",
+            "Record Count",
+            "Unique Count",
+            "Duplicate Count",
+            "Uniqueness %",
+        ],
+    )
