@@ -1,6 +1,9 @@
 from typing import Optional
 import pandas as pd
-
+from pandas.api.types import (
+    is_datetime64_any_dtype,
+    is_numeric_dtype,
+)
 
 def evaluate_completeness(
     table: pd.DataFrame,
@@ -332,5 +335,171 @@ def evaluate_uniqueness(
             "Unique Count",
             "Duplicate Count",
             "Uniqueness %",
+        ],
+    )
+
+def evaluate_distribution(
+    table: pd.DataFrame,
+    columns: Optional[list[str]] = None,
+) -> pd.DataFrame:
+    """
+    Evaluate the distribution of dataset variables.
+
+    The function automatically detects the data type of each selected
+    column and computes descriptive statistics according to its type.
+
+    Supported data types
+    --------------------
+    Numeric
+        - Min
+        - Max
+        - Mean
+        - Median
+        - Standard Deviation
+
+    Categorical
+        - Unique Values
+        - Top Value
+        - Top Percentage
+
+    Datetime
+        - Min Date
+        - Max Date
+        - Days
+        - Months
+        - Years
+
+    Parameters
+    ----------
+    table : pandas.DataFrame
+        Input dataset.
+
+    columns : list of str, optional
+        Columns to analyze. If None, all columns are evaluated.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Distribution profiling results with one row per analyzed column.
+
+    Raises
+    ------
+    ValueError
+        If duplicated or non-existing columns are provided.
+    """
+
+    columns = list(table.columns) if columns is None else columns
+
+    duplicated = pd.Index(columns).duplicated()
+    if duplicated.any():
+        repeated = pd.Index(columns)[duplicated].unique().tolist()
+        raise ValueError(f"Duplicate columns provided: {repeated}")
+
+    missing = sorted(set(columns) - set(table.columns))
+    if missing:
+        raise ValueError(f"Columns not found: {missing}")
+
+    results = []
+
+    for column in columns:
+
+        series = table[column]
+        dtype = str(series.dtype)
+
+        row = {
+            "Dimension": "Distribution",
+            "Column": column,
+            "Data Type": dtype,
+            "Min": None,
+            "Max": None,
+            "Mean": None,
+            "Median": None,
+            "Std": None,
+            "Unique": None,
+            "Top Value": None,
+            "Top %": None,
+            "Days": None,
+            "Months": None,
+            "Years": None,
+        }
+
+        # ---------- Datetime ----------
+        if is_datetime64_any_dtype(series):
+
+            valid = series.dropna()
+
+            if not valid.empty:
+                min_date = valid.min()
+                max_date = valid.max()
+                days = (max_date - min_date).days
+
+                row.update(
+                    {
+                        "Data Type": "Datetime",
+                        "Min": min_date.date(),
+                        "Max": max_date.date(),
+                        "Unique": int(valid.nunique()),
+                        "Days": int(days),
+                        "Months": round(days / 30.44, 2),
+                        "Years": round(days / 365.25, 2),
+                    }
+                )
+
+        # ---------- Numeric ----------
+        elif is_numeric_dtype(series):
+
+            valid = series.dropna()
+
+            if not valid.empty:
+                row.update(
+                    {
+                        "Data Type": "Numeric",
+                        "Min": round(valid.min(), 2),
+                        "Max": round(valid.max(), 2),
+                        "Mean": round(valid.mean(), 2),
+                        "Median": round(valid.median(), 2),
+                        "Std": round(valid.std(), 2),
+                    }
+                )
+
+        # ---------- Categorical ----------
+        else:
+
+            valid = series.dropna()
+
+            if not valid.empty:
+                freq = valid.value_counts(dropna=False)
+
+                top_value = freq.index[0]
+                top_count = int(freq.iloc[0])
+
+                row.update(
+                    {
+                        "Data Type": "Categorical",
+                        "Unique": int(valid.nunique()),
+                        "Top Value": top_value,
+                        "Top %": round((top_count / len(valid)) * 100, 2),
+                    }
+                )
+
+        results.append(row)
+
+    return pd.DataFrame(
+        results,
+        columns=[
+            "Dimension",
+            "Column",
+            "Data Type",
+            "Min",
+            "Max",
+            "Mean",
+            "Median",
+            "Std",
+            "Unique",
+            "Top Value",
+            "Top %",
+            "Days",
+            "Months",
+            "Years",
         ],
     )
