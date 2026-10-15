@@ -109,36 +109,40 @@ def dataset_columns(data, metadata=None, max_column_width=20, max_meaning_width=
     }
 
     column_width = max_column_width
+    meaning_width = max_meaning_width
+    table_width = (
+        column_width
+        + 15
+        + 17
+        + 13
+        + 9
+        + (17 + meaning_width + 4 if metadata else 0)
+    )
+
+    print("DATASET COLUMNS")
+    print("─" * table_width)
 
     if metadata:
-        meaning_width = max_meaning_width
-
-        print("DATASET COLUMNS")
-        print("─" * (column_width + 15 + 10 + 10 + 17 + meaning_width + 4))
-
         print(
             f"{'Column':<{column_width}}"
             f"{'Type':<15}"
-            f"{'Records':>10}"
-            f"{'Nulls':>10}"
+            f"{'Non-Null Fields':>17}"
+            f"{'Null Fields':>13}"
+            f"{'Null %':>9}"
             f"{'Understandable':>17}  "
             f"{'Meaning':<{meaning_width}}"
         )
 
-        print("─" * (column_width + 15 + 10 + 10 + 17 + meaning_width + 4))
-
     else:
-        print("DATASET COLUMNS")
-        print("─" * (column_width + 15 + 10 + 10))
-
         print(
             f"{'Column':<{column_width}}"
             f"{'Type':<15}"
-            f"{'Records':>10}"
-            f"{'Nulls':>10}"
+            f"{'Non-Null Fields':>17}"
+            f"{'Null Fields':>13}"
+            f"{'Null %':>9}"
         )
 
-        print("─" * (column_width + 15 + 10 + 10))
+    print("─" * table_width)
 
     for column in data.columns:
 
@@ -147,8 +151,9 @@ def dataset_columns(data, metadata=None, max_column_width=20, max_meaning_width=
             str(data[column].dtype)
         )
 
-        records = data[column].notna().sum()
+        non_nulls = data[column].notna().sum()
         nulls = data[column].isna().sum()
+        null_percentage = nulls / len(data) * 100 if len(data) else 0.0
 
         column_name = truncate(column, column_width)
 
@@ -163,8 +168,9 @@ def dataset_columns(data, metadata=None, max_column_width=20, max_meaning_width=
             print(
                 f"{column_name:<{column_width}}"
                 f"{dtype:<15}"
-                f"{records:>10,}"
-                f"{nulls:>10,}"
+                f"{non_nulls:>17,}"
+                f"{nulls:>13,}"
+                f"{null_percentage:>8.2f}%"
                 f"{understandable:>17}  "
                 f"{meaning:<{meaning_width}}"
             )
@@ -173,16 +179,11 @@ def dataset_columns(data, metadata=None, max_column_width=20, max_meaning_width=
             print(
                 f"{column_name:<{column_width}}"
                 f"{dtype:<15}"
-                f"{records:>10,}"
-                f"{nulls:>10,}"
+                f"{non_nulls:>17,}"
+                f"{nulls:>13,}"
+                f"{null_percentage:>8.2f}%"
             )
 
-    print("─" * (
-        column_width
-        + 15
-        + 10
-        + 10
-        + (17 + meaning_width + 4 if metadata else 0)
-    ))
+    print("─" * table_width)
 
 
