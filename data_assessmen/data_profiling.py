@@ -1,6 +1,8 @@
 from typing import Optional
 import pandas as pd
+from collections.abc import Mapping, Sequence
 from pandas.api.types import (
+    is_bool_dtype,
     is_datetime64_any_dtype,
     is_numeric_dtype,
 )
@@ -446,7 +448,7 @@ def evaluate_distribution(
                 )
 
         # ---------- Numeric ----------
-        elif is_numeric_dtype(series):
+        elif is_numeric_dtype(series) and not is_bool_dtype(series):
 
             valid = series.dropna()
 
@@ -503,3 +505,187 @@ def evaluate_distribution(
             "Years",
         ],
     )
+
+def evaluate_referential_integrity(
+        relationships: Sequence[Mapping[str, object]]
+)->pd.DataFrame:
+    """
+        Evaluate referential integrity across multiple parent-child relationships.
+
+        For each relationship, checks whether non-null foreign key values in the
+        child DataFrame exist in the referenced key column of the parent DataFrame.
+        Null foreign keys are counted separately and excluded from the compliance
+        calculation.
+
+        Parameters
+        ----------
+        relationships : Sequence[Mapping[str, object]]
+            Sequence of relationship configurations. Each mapping must contain
+            the following fields:
+
+            - ``child`` : str
+                Name of the child table.
+            - ``child_key`` : str
+                Foreign key column in the child table.
+            - ``parent`` : str
+                Name of the parent table.
+            - ``parent_key`` : str
+                Referenced key column in the parent table.
+            - ``cardinality`` : str
+                Declared relationship cardinality, such as ``"N:1"``.
+            - ``data_child`` : pandas.DataFrame
+                DataFrame containing the child records.
+            - ``data_parent`` : pandas.DataFrame
+                DataFrame containing the parent records.
+
+        Returns
+        -------
+        pandas.DataFrame
+            A summary containing one row per evaluated relationship, with the
+            following columns:
+
+            - ``parent_table`` : Name of the parent table.
+            - ``parent_column`` : Referenced key column.
+            - ``child_table`` : Name of the child table.
+            - ``child_column`` : Foreign key column.
+            - ``cardinality`` : Declared relationship cardinality.
+            - ``total_child_records`` : Total number of rows in the child DataFrame.
+            - ``evaluated_references`` : Number of non-null child key values.
+            - ``valid_references`` : Number of references matching a parent key.
+            - ``orphan_references`` : Number of references without a matching parent.
+            - ``null_references`` : Number of null child key values.
+            - ``compliance_pct`` : Percentage of valid references among evaluated
+            references.
+            - ``non_compliance_pct`` : Percentage of orphan references among
+            evaluated references.
+
+            If no non-null references are available, both percentage metrics
+            are NaN.
+
+        Raises
+        ------
+        TypeError
+            If ``relationships`` is not a valid sequence, or if either DataFrame
+            specified in a relationship is not a pandas DataFrame.
+        ValueError
+            If a relationship is missing required fields or a specified key
+            column does not exist in its corresponding DataFrame.
+
+        Notes
+        -----
+        - Null child keys are excluded from the referential integrity denominator.
+        - Duplicate child references are evaluated individually.
+        - Duplicate parent keys do not increase the number of valid references.
+        - The declared cardinality is reported but is not validated.
+        - The function does not modify the input DataFrames.
+        - Referential integrity is evaluated using vectorized pandas operations.
+
+        Examples
+        --------
+        >>> relationships = [
+        ...     {
+        ...         "child": "order_items",
+        ...         "child_key": "order_id",
+        ...         "parent": "orders",
+        ...         "parent_key": "order_id",
+        ...         "cardinality": "N:1",
+        ...         "data_child": df_order_items,
+        ...         "data_parent": df_orders,
+        ...     }
+        ... ]
+        >>> result = evaluate_referential_integrity(relationships)
+        >>> result[["parent_table", "child_table", "compliance_pct"]]
+    """
+
+    if not isinstance(relationships, Sequence) or isinstance(
+        relationships, (str, bytes)
+    ):
+        raise TypeError("'relationships' must be a sequence.")
+
+    results: list[dict[str, object]] = []
+
+    required_fields = {
+        "child",
+        "child_key",
+        "parent",
+        "parent_key",
+        "cardinality",
+        "data_child",
+        "data_parent",
+    }
+
+    for relationship in relationships:
+        missing_fields = required_fields - relationship.keys()
+        if missing_fields:
+            raise ValueError(
+                f"Missing relationship fields: {sorted(missing_fields)}"
+            )
+        child_df = relationship["data_child"]
+        parent_df = relationship["data_parent"]
+
+        if not isinstance(child_df, pd.DataFrame):
+            raise TypeError("'data_child' must be a pandas DataFrame.")
+        
+        if not isinstance(parent_df, pd.DataFrame):
+            raise TypeError("'data_parent' must be a pandas DataFrame.")
+
+        child_key = relationship["child_key"]
+        parent_key = relationship["parent_key"]
+
+        if child_key not in child_df.columns:
+            raise ValueError(
+                f"Column {child_key!r} does not exist in the child table."
+            )
+
+        if parent_key not in parent_df.columns:
+            raise ValueError(
+                f"Column {parent_key!r} does not exist in the parent table."
+            )
+
+        child_keys = child_df[child_key]
+        parent_keys = parent_df[parent_key]
+
+        # Separate null references from evaluable references.
+        non_null_references = child_keys.dropna()
+        null_references = int(child_keys.isna().sum())
+
+        # Retrieve distinct, non-null parent keys.
+        valid_parent_keys = parent_keys.dropna().unique()
+
+        # Vectorized comparison: no row-by-row iteration.
+        valid_mask = non_null_references.isin(valid_parent_keys)
+
+        valid_references = int(valid_mask.sum())
+        orphan_references = len(non_null_references) - valid_references
+        evaluated_references = len(non_null_references)
+
+        compliance_pct = (
+            valid_references / evaluated_references * 100
+            if evaluated_references > 0
+            else float("nan")
+        )
+
+        non_compliance_pct = (
+            orphan_references / evaluated_references * 100
+            if evaluated_references > 0
+            else float("nan")
+        )
+
+        results.append(
+            {
+                "parent_table": relationship["parent"],
+                "parent_column": parent_key,
+                "child_table": relationship["child"],
+                "child_column": child_key,
+                "cardinality": relationship["cardinality"],
+                "total_child_records": len(child_df),
+                "evaluated_references": evaluated_references,
+                "valid_references": valid_references,
+                "orphan_references": orphan_references,
+                "null_references": null_references,
+                "compliance_pct": round(compliance_pct, 2),
+                "non_compliance_pct": round(non_compliance_pct, 2),
+            }
+        )
+
+    return pd.DataFrame(results)
